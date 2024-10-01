@@ -10,18 +10,21 @@ library(colorspace)
 library(RColorBrewer)
 
 
-setwd("/Volumes/Seagate Por")
+setwd("/Volumes/Seagate_HD/")
 
-surv_loc_df=read.table("PhD/Chapter_5_spatial_ID_x_E/Spatial_var_inbreeding/survival_loc.txt", sep = ",", header = TRUE)%>%
+surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc_2024.txt", sep = ",", header = TRUE)%>%
   filter(!E>1385)%>%
   filter(!N<7997.5)#remove 38 records outside the syudy areas
 
+surv_loc_df%>%
+  group_by(Reg)%>%
+  summarise(mean=mean(FROH))
 
 ## FROH per region violin plots 
 
 cols <- c("SI"="#f0a30a" ,"IM"="#a20025","LA"="#00aba9","NG"="chocolate1","MG"="#60a917", "SG"="#647687")
 
-ggplot(surv_loc_df, aes(x=Reg, y=FROH, colour=Reg))+
+violin=ggplot(surv_loc_df, aes(x=Reg, y=FROH, colour=Reg))+
   scale_x_discrete(limits=c("SI", "IM", "LA", "NG","MG",  "SG"))+
   geom_violin()+
   coord_flip()+
@@ -36,7 +39,8 @@ ggplot(surv_loc_df, aes(x=Reg, y=FROH, colour=Reg))+
         axis.text.y = element_blank(),
         legend.position = "none")+
   labs(y=expression(F["ROH"]))
-  
+
+violin
 
 ##############################################################################
 #### testing difference region as categorical ##############################
@@ -71,6 +75,28 @@ FROH_model_simple=glmmTMB(FROH~ year_cont+ Reg+
 
 summary(FROH_model_simple)
 
+em=emmeans(FROH_model_simple, ~"Reg")
+pairs(em)
+
+
+# contrast  estimate      SE   df t.ratio p.value
+# IM - LA   0.002978 0.00207 2665   1.440  0.7023
+# IM - MG   0.006009 0.00198 2665   3.031  0.0297 <<
+# IM - NG   0.005377 0.00184 2665   2.921  0.0410 <<
+# IM - SG   0.007441 0.00212 2665   3.513  0.0060 <<
+# IM - SI  -0.000100 0.00190 2665  -0.053  1.0000
+# LA - MG   0.003032 0.00206 2665   1.475  0.6806
+# LA - NG   0.002400 0.00193 2665   1.245  0.8146
+# LA - SG   0.004463 0.00219 2665   2.042  0.3188
+# LA - SI  -0.003078 0.00200 2665  -1.542  0.6368
+# MG - NG  -0.000632 0.00183 2665  -0.346  0.9993
+# MG - SG   0.001431 0.00208 2665   0.687  0.9834
+# MG - SI  -0.006110 0.00190 2665  -3.216  0.0166 <<
+# NG - SG   0.002063 0.00199 2665   1.039  0.9048
+# NG - SI  -0.005478 0.00176 2665  -3.115  0.0229 <<
+# SG - SI  -0.007541 0.00204 2665  -3.693  0.0031 <<
+
+#P value adjustment: tukey method for comparing a family of 6 estimates 
 
 FROH_reg_pred=ggpredict(FROH_model_simple, terms = c("Reg"))
 
@@ -80,11 +106,13 @@ reg=FROH_reg_pred%>%
   geom_pointrange(linewidth=1)+
   theme_bw()+
   scale_color_manual(values = c("#f0a30a" ,"#a20025","#00aba9","chocolate1","#60a917", "#647687"))+
-  labs(x="Spatial region", y=expression(paste("F"[ROH])))+
+  labs(x="Spatial region", y=expression(paste("Predicted F"[ROH])))+
   theme(text = element_text(size = 18),legend.position = "none")
 reg
 
- 
+
+
+
 
 ########################################################################
 ############# region as matrix INLA ##################################
@@ -183,8 +211,24 @@ inla_froh_gg=ggField(IM_sp2, Mesh, Fill="Continuous")+
   theme_bw()+
   scale_fill_continuous_sequential(palette = "BluYl")+
   theme(text = element_text(size = 18),
-        legend.title=element_text(size=rel(0.8)))
+        legend.title=element_text(size=rel(0.8))) +
+  annotate("segment", x = 1372, xend = 1382, y = 8000, yend = 8000, colour = "black", linewidth = 1) +
+  annotate("text" ,x = 1377, y = 8001.5, label = "1km")+
+  geom_point(data = FROH_reg%>%
+               filter(!E<1355)%>%
+               filter(!E>1385)%>%
+               filter(!N<7997.5), aes(x = E, y = N), alpha=0.1) # Specify data
 
 
-reg+inla_froh_gg+plot_annotation(tag_levels = 'A')
-                     
+
+
+froh_spat=reg+inla_froh_gg+plot_annotation(tag_levels = 'A')
+froh_spat                    
+
+ggsave(froh_spat,
+       file = "Deer_spatial_variation_ID/plots/Overleaf_plots_spatial_ID/Fig2.png",
+       width = 9,
+       height = 5, 
+       bg = "white"
+)
+

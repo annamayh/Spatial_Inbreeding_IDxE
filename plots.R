@@ -1,3 +1,8 @@
+library(tidyverse)
+library(patchwork)
+
+setwd("/Volumes/Seagate Por")
+
 load("Deer_spatial_variation_ID/plots/surv_plots.RData")
 load("Deer_spatial_variation_ID/plots/bw_plots.RData")
 
@@ -6,7 +11,56 @@ all=(bw_reg+inla_bw_plot)/(surv_reg+inla_surv_plot)+plot_annotation(tag_levels =
 all
 
 ggsave(all,
-       file = "Deer_spatial_variation_ID/plots/bw_surv_spatial_var.png",
+       file = "Deer_spatial_variation_ID/plots/Overleaf_plots_spatial_ID/Fig3.png",
        width = 11,
        height = 12,
-       dpi=1000)
+       dpi=300)
+
+
+
+
+load("Deer_spatial_variation_ID/plots/bw_IDxE.RData")
+load("Deer_spatial_variation_ID/plots/surv_IDxE_plots.RData")
+
+surv_loc_df=read.table("Deer_spatial_variation_ID/Data_archiving/survival_loc_2024.txt", sep = ",", header = TRUE)%>%
+  filter(!E>1385)%>%
+  filter(!N<7997.5)#remove 38 records outside the syudy areas
+
+
+## FROH per region violin plots 
+
+cols <- c("SI"="#f0a30a" ,"IM"="#a20025","LA"="#00aba9","NG"="chocolate1","MG"="#60a917", "SG"="#647687")
+
+violin=ggplot(surv_loc_df, aes(x=Reg, y=FROH))+
+  scale_x_discrete(limits=c("SI", "IM", "LA", "NG","MG",  "SG"))+
+  geom_jitter(aes(colour=Reg), position=position_jitter(0.2), alpha=0.5)+
+  scale_color_manual(values=cols)+
+  geom_violin(fill = "transparent")+
+  coord_flip()+
+  theme_bw()+
+  geom_hline(yintercept = 0.1, linetype=2)+
+  geom_hline(yintercept = 0.2, linetype=2)+
+  geom_hline(yintercept = 0.3, linetype=2)+
+  theme(text = element_text(size = 14), 
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.position = "none")+
+  labs(y=expression(F["ROH"])) +
+  stat_summary(fun = "mean",
+               geom = "point",
+               color = "black")
+
+violin
+
+IDxE=(inter_extended_bw+inter_extended_surv)/violin+
+  plot_annotation(tag_levels = 'A')+plot_layout(guides = "collect") +
+  plot_layout(heights = c(7,4))
+IDxE
+
+ggsave(IDxE,
+       file = "Deer_spatial_variation_ID/plots/Overleaf_plots_spatial_ID/Fig4_IDxE.png",
+       width = 9,
+       height = 8,
+       dpi=300)
+
+

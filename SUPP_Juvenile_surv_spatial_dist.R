@@ -6,16 +6,15 @@ library(emmeans)
 library(INLA)
 library(inlabru)
 library(ggregplot)
-
+library(colorspace)
 
 setwd("/Volumes/Seagate_HD/")
 
 surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc_2024.txt", sep = ",", header = TRUE)%>%
-  select(-MumFROH, -BirthWt)%>%
+  select(-MumFROH)%>%
   filter(!E>1385)%>%
   filter(!N<7997.5) %>%#removing ids with no known region or ~10 ids with outside the limits of study area
   na.omit()
-
 
 head(surv_loc_df)
 
@@ -26,7 +25,7 @@ surv_loc_df$Sex=as.factor(surv_loc_df$Sex)
 surv_loc_df$MotherStatus=as.factor(surv_loc_df$MotherStatus)
 surv_loc_df$Reg=as.factor(surv_loc_df$Reg)
 ## base model of juvenile survival
-suv_model_simple=glmmTMB(juvenile_survival~ 1+ Sex + MotherStatus + mum_age+mum_age_sq+Day_seq+FROH+
+suv_model_simple=glmmTMB(juvenile_survival~ 1+ Sex + MotherStatus + mum_age+mum_age_sq+Day_seq+FROH+BirthWt+
                            (1|BirthYear)+(1|MumCode), 
                          family=binomial, 
                          data=surv_loc_df, 
@@ -164,21 +163,23 @@ INLADICFig(SpatialList, ModelNames = c("IM2" ,"SPDE_1"))+theme_classic()
 
 
 inla_surv_plot=ggField(IM_spde, Mesh)+
-  labs(fill = "Juvenile survival \n(as untransformed \ndeviation from mean)")+
+  labs(fill = "Juvenile survival \n(as untransformed \ndevaition from mean)")+
   theme_bw()+
   scale_fill_discrete_sequential(palette = "Oranges", rev=FALSE)+
   theme(text = element_text(size = 18),
         legend.title=element_text(size=rel(0.7))) +
   annotate("segment", x = 1372, xend = 1382, y = 8000, yend = 8000, colour = "black", linewidth = 1) +
-  annotate("text" ,x = 1377, y = 8001.5, label = "1km")+
-  geom_point(data = surv_loc_df%>%
-               filter(!E<1355)%>%
-               filter(!E>1385)%>%
-               filter(!N<7997.5), aes(x = E, y = N), alpha=0.15) # Specify data
+  annotate("text" ,x = 1377, y = 8001.5, label = "1km")
 
 inla_surv_plot
 
 
 
-surv_reg+inla_surv_plot+plot_annotation(tag_levels = 'A')
-save(surv_reg,inla_surv_plot, file = "Deer_spatial_variation_ID/plots/surv_plots.RData")
+supp_surv=surv_reg+inla_surv_plot+plot_annotation(tag_levels = 'A')
+
+ggsave(supp_surv, 
+       file = "Deer_spatial_variation_ID/plots/SUPP_juve_surv_wBW.png",
+       width = 11,
+       height = 6,
+       dpi=1000
+       )

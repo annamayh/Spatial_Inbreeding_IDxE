@@ -9,14 +9,11 @@ library(ggregplot)
 
 setwd("/Volumes/Seagate Por")
 
-surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc.txt", sep = ",", header = TRUE)%>%
-  select(-BirthWt)
+bw_df=read.table("Deer_spatial_variation_ID/birthweight_loc_2024.txt", sep = ",", header = TRUE)
 
-birth_wt<-read.csv("Deer_spatial_variation_ID/sys_BirthWt.csv") 
-
-bw_df=surv_loc_df%>%full_join(birth_wt)%>%na.omit
-head(bw_df)
-table(bw_df$Reg)
+bw_df%>%
+  group_by(Reg)%>%
+  summarise(mean=mean(CaptureWt))
 
 bw_df$Code=as.factor(bw_df$Code)
 bw_df$MumCode=as.factor(bw_df$MumCode)
@@ -36,11 +33,30 @@ bw_model_simple=glmmTMB(CaptureWt~ Sex + AgeHrs+ MotherStatus+mum_age+mum_age_sq
 bw_reg_fixed=update(bw_model_simple, ~ . + Reg+FROH) ##just region as fixed effect
 summary(bw_reg_fixed)
 
+em=emmeans(bw_reg_fixed, ~"Reg")
+pairs(em)
 
-reg_pred_f=ggpredict(bw_reg_fixed, terms = c("Reg","Sex[1]","AgeHrs[0]"))%>%
+# contrast estimate     SE   df t.ratio p.value
+# IM - LA   -0.0359 0.1190 2367  -0.301  0.9997
+# IM - MG   -0.5162 0.1051 2367  -4.911  <.0001
+# IM - NG   -0.0629 0.0965 2367  -0.651  0.9870
+# IM - SG   -0.7415 0.1120 2367  -6.618  <.0001
+# IM - SI    0.0268 0.1025 2367   0.262  0.9998
+# LA - MG   -0.4803 0.1113 2367  -4.315  0.0002
+# LA - NG   -0.0270 0.1059 2367  -0.255  0.9999
+# LA - SG   -0.7056 0.1188 2367  -5.941  <.0001
+# LA - SI    0.0627 0.1159 2367   0.541  0.9945
+# MG - NG    0.4533 0.0887 2367   5.110  <.0001
+# MG - SG   -0.2253 0.0963 2367  -2.340  0.1785
+# MG - SI    0.5430 0.1023 2367   5.309  <.0001
+# NG - SG   -0.6786 0.1016 2367  -6.682  <.0001
+# NG - SI    0.0897 0.0975 2367   0.920  0.9415
+# SG - SI    0.7683 0.1082 2367   7.103  <.0001
+
+reg_pred_f=ggpredict(bw_reg_fixed, condition=c(MotherStatus='Milk'), terms = c("Reg","Sex[1]","AgeHrs[0]"))%>%
   mutate(x = fct_relevel(x, "SI", "IM", "LA", "NG","MG",  "SG"))
 
-reg_pred_m=ggpredict(bw_reg_fixed, terms = c("Reg","Sex[2]","AgeHrs[0]"))%>%
+reg_pred_m=ggpredict(bw_reg_fixed, condition=c(MotherStatus='Milk'), terms = c("Reg","Sex[2]","AgeHrs[0]"))%>%
   mutate(x = fct_relevel(x, "SI", "IM", "LA", "NG","MG",  "SG"))
 
 reg_pred=rbind(reg_pred_f,reg_pred_m)%>%
@@ -144,18 +160,27 @@ INLADICFig(List)
 
 library(colorspace)
 
+## plotting using ggregplot
 inla_bw_plot=ggField(IM_spde, Mesh)+
-  labs(fill = "Birth weight (kg) \n(as deviation \nfrom mean)")+
+  labs(fill = "Capture weight (kg) \n(as deviation \nfrom mean)")+
   theme_bw()+
   scale_fill_discrete_sequential(palette = "Burg", rev=FALSE)+
   theme(text = element_text(size = 18),
-        legend.title=element_text(size=rel(0.7)))
+        legend.title=element_text(size=rel(0.7))) +
+  annotate("segment", x = 1372, xend = 1382, y = 8000, yend = 8000, colour = "black", linewidth = 1) +
+  annotate("text" ,x = 1377, y = 8001.5, label = "1km")+
+  geom_point(data = bw_df%>%
+               filter(!E<1355)%>%
+               filter(!E>1385)%>%
+               filter(!N<7997.5), aes(x = E, y = N), alpha=0.15) # Specify data
+  
 
 
 inla_bw_plot
 
 
 birth_weight=bw_reg+inla_bw_plot+plot_annotation(tag_levels = 'A')
+birth_weight
 
 save(bw_reg,inla_bw_plot, file = "Deer_spatial_variation_ID/plots/bw_plots.RData")
 
