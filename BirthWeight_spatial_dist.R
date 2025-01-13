@@ -6,14 +6,20 @@ library(emmeans)
 library(INLA)
 library(inlabru)
 library(ggregplot)
+library(effsize)
 
-setwd("/Volumes/Seagate Por")
+setwd("/Volumes/Seagate_HD/")
 
-bw_df=read.table("Deer_spatial_variation_ID/birthweight_loc_2024.txt", sep = ",", header = TRUE)
+#upadted 25.11.24
+bw_df=read.table("Deer_spatial_variation_ID/birthweight_loc_2024_new_calves.txt", sep = ",", header = TRUE)
+
+mean(bw_df$CaptureWt)
+sd(bw_df$CaptureWt)
 
 bw_df%>%
   group_by(Reg)%>%
   summarise(mean=mean(CaptureWt))
+
 
 bw_df$Code=as.factor(bw_df$Code)
 bw_df$MumCode=as.factor(bw_df$MumCode)
@@ -21,37 +27,46 @@ bw_df$BirthYear=as.factor(bw_df$BirthYear)
 bw_df$Sex=as.factor(bw_df$Sex)
 bw_df$Reg=as.factor(bw_df$Reg)
 
+cohen.d(bw_df$CaptureWt[bw_df$Reg == "SI"], bw_df$CaptureWt[bw_df$Reg == "SG"])
+cohen.d(bw_df$CaptureWt[bw_df$Reg == "SI"], bw_df$CaptureWt[bw_df$Reg == "LA"])
+cohen.d(bw_df$CaptureWt[bw_df$Reg == "SI"], bw_df$CaptureWt[bw_df$Reg == "NG"])
+cohen.d(bw_df$CaptureWt[bw_df$Reg == "SI"], bw_df$CaptureWt[bw_df$Reg == "MG"])
+
+
 ## Region as categorical ##
 
-bw_model_simple=glmmTMB(CaptureWt~ Sex + AgeHrs+ MotherStatus+mum_age+mum_age_sq+Day_seq+
+bw_model_simple=glmmTMB(CaptureWt~ Sex + AgeHrs+ MotherStatus+mum_age+mum_age_sq+Day_seq+FROH+
                           (1|BirthYear)+ (1|MumCode), 
                         family=gaussian(), 
                         data=bw_df, 
                         na.action = na.omit,
 )
 
-bw_reg_fixed=update(bw_model_simple, ~ . + Reg+FROH) ##just region as fixed effect
+bw_reg_fixed=update(bw_model_simple, ~ . + Reg) ##just region as fixed effect
 summary(bw_reg_fixed)
+
+anova(bw_model_simple,bw_reg_fixed) ## region fixed is a better fit i.e. region is significant.
+
 
 em=emmeans(bw_reg_fixed, ~"Reg")
 pairs(em)
 
 # contrast estimate     SE   df t.ratio p.value
-# IM - LA   -0.0359 0.1190 2367  -0.301  0.9997
-# IM - MG   -0.5162 0.1051 2367  -4.911  <.0001
-# IM - NG   -0.0629 0.0965 2367  -0.651  0.9870
-# IM - SG   -0.7415 0.1120 2367  -6.618  <.0001
-# IM - SI    0.0268 0.1025 2367   0.262  0.9998
-# LA - MG   -0.4803 0.1113 2367  -4.315  0.0002
-# LA - NG   -0.0270 0.1059 2367  -0.255  0.9999
-# LA - SG   -0.7056 0.1188 2367  -5.941  <.0001
-# LA - SI    0.0627 0.1159 2367   0.541  0.9945
-# MG - NG    0.4533 0.0887 2367   5.110  <.0001
-# MG - SG   -0.2253 0.0963 2367  -2.340  0.1785
-# MG - SI    0.5430 0.1023 2367   5.309  <.0001
-# NG - SG   -0.6786 0.1016 2367  -6.682  <.0001
-# NG - SI    0.0897 0.0975 2367   0.920  0.9415
-# SG - SI    0.7683 0.1082 2367   7.103  <.0001
+# IM - LA  -0.05865 0.1160 2483  -0.505  0.9960
+# IM - MG  -0.45431 0.1040 2483  -4.373  0.0002
+# IM - NG  -0.05160 0.0944 2483  -0.546  0.9942
+# IM - SG  -0.72288 0.1090 2483  -6.641  <.0001
+# IM - SI   0.05518 0.1000 2483   0.550  0.9940
+# LA - MG  -0.39567 0.1080 2483  -3.652  0.0036
+# LA - NG   0.00705 0.1030 2483   0.068  1.0000
+# LA - SG  -0.66424 0.1140 2483  -5.817  <.0001
+# LA - SI   0.11382 0.1130 2483   1.012  0.9142
+# MG - NG   0.40272 0.0879 2483   4.579  0.0001
+# MG - SG  -0.26857 0.0924 2483  -2.907  0.0428
+# MG - SI   0.50949 0.1010 2483   5.027  <.0001
+# NG - SG  -0.67129 0.0980 2483  -6.847  <.0001
+# NG - SI   0.10677 0.0958 2483   1.114  0.8757
+# SG - SI   0.77806 0.1050 2483   7.404  <.0001
 
 reg_pred_f=ggpredict(bw_reg_fixed, condition=c(MotherStatus='Milk'), terms = c("Reg","Sex[1]","AgeHrs[0]"))%>%
   mutate(x = fct_relevel(x, "SI", "IM", "LA", "NG","MG",  "SG"))
@@ -162,7 +177,7 @@ library(colorspace)
 
 ## plotting using ggregplot
 inla_bw_plot=ggField(IM_spde, Mesh)+
-  labs(fill = "Capture weight (kg) \n(as deviation \nfrom mean)")+
+  labs(fill = "Capture weight (kg) \n(as deviation from \nmean in SD units)")+
   theme_bw()+
   scale_fill_discrete_sequential(palette = "Burg", rev=FALSE)+
   theme(text = element_text(size = 18),

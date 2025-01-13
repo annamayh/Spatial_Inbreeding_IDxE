@@ -9,38 +9,25 @@ library(ggregplot)
 library(colorspace)
 library(RColorBrewer)
 
+#mupdated 25.11.23 ## 
+# to transform FROH using sqrt # 
 
 setwd("/Volumes/Seagate_HD/")
 
-surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc_2024.txt", sep = ",", header = TRUE)%>%
+surv_loc_df=read.table("Deer_spatial_variation_ID/df_loc_2024_new_calves_all.txt", sep = ",", header = TRUE)%>%
   filter(!E>1385)%>%
-  filter(!N<7997.5)#remove 38 records outside the syudy areas
+  filter(!N<7997.5)%>%#remove 38 records outside the syudy areas
+  drop_na(FROH)%>%
+  mutate(FROH_trans=sqrt(FROH))
+
+mean(surv_loc_df$FROH)
+sd(surv_loc_df$FROH)
+
 
 surv_loc_df%>%
   group_by(Reg)%>%
   summarise(mean=mean(FROH))
 
-## FROH per region violin plots 
-
-cols <- c("SI"="#f0a30a" ,"IM"="#a20025","LA"="#00aba9","NG"="chocolate1","MG"="#60a917", "SG"="#647687")
-
-violin=ggplot(surv_loc_df, aes(x=Reg, y=FROH, colour=Reg))+
-  scale_x_discrete(limits=c("SI", "IM", "LA", "NG","MG",  "SG"))+
-  geom_violin()+
-  coord_flip()+
-  geom_jitter(position=position_jitter(0.2), alpha=0.5)+
-  scale_color_manual(values=cols)+
-  theme_bw()+
-  geom_hline(yintercept = 0.1, linetype=2)+
-  geom_hline(yintercept = 0.2, linetype=2)+
-  geom_hline(yintercept = 0.3, linetype=2)+
-  theme(text = element_text(size = 18), 
-        axis.title.y = element_blank(),
-        axis.text.y = element_blank(),
-        legend.position = "none")+
-  labs(y=expression(F["ROH"]))
-
-violin
 
 ##############################################################################
 #### testing difference region as categorical ##############################
@@ -49,7 +36,7 @@ surv_loc_df$BirthYear=as.numeric(surv_loc_df$BirthYear)
 
 
 FROH_reg=surv_loc_df%>%
-  select(Code, BirthYear, Sex, MumCode, FROH, Reg, N, E)%>%
+  select(Code, BirthYear, Sex, MumCode, FROH_trans, Reg, N, E)%>%
   filter(Sex!=3)%>%
   na.omit()%>%
   mutate(year_cont=BirthYear-min(BirthYear))#
@@ -63,14 +50,29 @@ FROH_reg$Sex=as.factor(FROH_reg$Sex)
 FROH_reg$Reg=as.factor(FROH_reg$Reg)
 
 
+cohen.d(FROH_reg$FROH[FROH_reg$Reg == "SI"], FROH_reg$FROH[FROH_reg$Reg == "SG"])
+#cohen.d(FROH_reg$FROH[FROH_reg$Reg == "SI"], FROH_reg$FROH[FROH_reg$Reg == "LA"])
+#cohen.d(FROH_reg$FROH[FROH_reg$Reg == "SI"], FROH_reg$FROH[FROH_reg$Reg == "NG"])
+cohen.d(FROH_reg$FROH[FROH_reg$Reg == "SI"], FROH_reg$FROH[FROH_reg$Reg == "NG"])
 
-FROH_model_simple=glmmTMB(FROH~ year_cont+ Reg+
+
+cohen.d(FROH_reg$FROH[FROH_reg$Reg == "IM"], FROH_reg$FROH[FROH_reg$Reg == "SG"])
+#cohen.d(FROH_reg$FROH[FROH_reg$Reg == "IM"], FROH_reg$FROH[FROH_reg$Reg == "LA"])
+cohen.d(FROH_reg$FROH[FROH_reg$Reg == "IM"], FROH_reg$FROH[FROH_reg$Reg == "NG"])
+#cohen.d(FROH_reg$FROH[FROH_reg$Reg == "IM"], FROH_reg$FROH[FROH_reg$Reg == "MG"])
+
+
+
+FROH_model_base=glmmTMB(FROH_trans~ year_cont+
                             (1|MumCode), 
                           family=gaussian(), 
                           data=FROH_reg, 
                           na.action = na.omit,
 )
 
+FROH_model_simple=update(FROH_model_base, ~ . + Reg) ##just region as fixed effect
+
+anova(FROH_model_base,FROH_model_simple) ## region fixed is a better fit i.e. region is significant.
 
 
 summary(FROH_model_simple)
@@ -78,31 +80,37 @@ summary(FROH_model_simple)
 em=emmeans(FROH_model_simple, ~"Reg")
 pairs(em)
 
-
-# contrast  estimate      SE   df t.ratio p.value
-# IM - LA   0.002978 0.00207 2665   1.440  0.7023
-# IM - MG   0.006009 0.00198 2665   3.031  0.0297 <<
-# IM - NG   0.005377 0.00184 2665   2.921  0.0410 <<
-# IM - SG   0.007441 0.00212 2665   3.513  0.0060 <<
-# IM - SI  -0.000100 0.00190 2665  -0.053  1.0000
-# LA - MG   0.003032 0.00206 2665   1.475  0.6806
-# LA - NG   0.002400 0.00193 2665   1.245  0.8146
-# LA - SG   0.004463 0.00219 2665   2.042  0.3188
-# LA - SI  -0.003078 0.00200 2665  -1.542  0.6368
-# MG - NG  -0.000632 0.00183 2665  -0.346  0.9993
-# MG - SG   0.001431 0.00208 2665   0.687  0.9834
-# MG - SI  -0.006110 0.00190 2665  -3.216  0.0166 <<
-# NG - SG   0.002063 0.00199 2665   1.039  0.9048
-# NG - SI  -0.005478 0.00176 2665  -3.115  0.0229 <<
-# SG - SI  -0.007541 0.00204 2665  -3.693  0.0031 <<
+#updated 25.11.23
+# 
+# contrast estimate      SE   df t.ratio p.value
+# IM - LA   0.00179 0.00379 2779   0.471  0.9971
+# IM - MG   0.00760 0.00378 2779   2.011  0.3364
+# IM - NG   0.01056 0.00340 2779   3.104  0.0237 <<
+# IM - SG   0.01538 0.00387 2779   3.975  0.0010 <<
+# IM - SI  -0.00203 0.00349 2779  -0.582  0.9922
+# LA - MG   0.00581 0.00380 2779   1.528  0.6463
+# LA - NG   0.00878 0.00348 2779   2.524  0.1174
+# LA - SG   0.01359 0.00391 2779   3.479  0.0068 <<
+# LA - SI  -0.00381 0.00358 2779  -1.067  0.8945
+# MG - NG   0.00296 0.00344 2779   0.862  0.9554
+# MG - SG   0.00778 0.00383 2779   2.028  0.3265
+# MG - SI  -0.00963 0.00355 2779  -2.709  0.0738 <<
+# NG - SG   0.00481 0.00358 2779   1.346  0.7590
+# NG - SI  -0.01259 0.00319 2779  -3.949  0.0011 <<
+# SG - SI  -0.01741 0.00365 2779  -4.763  <.0001 <<
 
 #P value adjustment: tukey method for comparing a family of 6 estimates 
 
 FROH_reg_pred=ggpredict(FROH_model_simple, terms = c("Reg"))
 
 reg=FROH_reg_pred%>%
-  mutate(x = fct_relevel(x, "SI", "IM", "LA", "NG","MG",  "SG"))%>%
-  ggplot( aes(x=x, y=predicted, color=x, ymin=conf.low, ymax=conf.high))+
+  mutate(x = fct_relevel(x, "SI", "IM", "LA", "NG","MG","SG" ))%>%
+  mutate(predicted_rescaled = predicted^2, 
+         conf.low_rescaled = conf.low^2, 
+         conf.high_resscaled = conf.high^2
+         )%>%
+  na.omit()%>%
+  ggplot( aes(x=x, y=predicted_rescaled, color=x, ymin=conf.low_rescaled, ymax=conf.high_resscaled))+
   geom_pointrange(linewidth=1)+
   theme_bw()+
   scale_color_manual(values = c("#f0a30a" ,"#a20025","#00aba9","chocolate1","#60a917", "#647687"))+
@@ -118,12 +126,12 @@ reg
 ############# region as matrix INLA ##################################
 ########################################################################
 ## simple models first
-IM1  <- inla(FROH~year_cont, 
+IM1  <- inla(FROH_trans~year_cont, 
              family = "gaussian",
              data = FROH_reg,
              control.compute = list(dic=TRUE)) 
 
-IM2  <- inla(FROH~year_cont+ f(MumCode, model = 'iid'), 
+IM2  <- inla(FROH_trans~year_cont+ f(MumCode, model = 'iid'), 
              family = "gaussian",
              data = FROH_reg,
              control.compute = list(dic=TRUE)) 
@@ -170,7 +178,7 @@ x=as.data.frame(X0)
 ## now fitting spde and birth year as random effects 
 # have to re-do the stack
 stackfit2=inla.stack(
-  data=list(y=FROH_reg$FROH), 
+  data=list(y=FROH_reg$FROH_trans), 
   A = list(1, 1, A), 
   effects=list(
     X=x,
@@ -207,7 +215,7 @@ coul <- viridis(100)
 
 
 inla_froh_gg=ggField(IM_sp2, Mesh, Fill="Continuous")+
-  labs(fill = "FROH\n(deviation \nfrom mean)")+
+  labs(fill = "FROH\n(deviation \nfrom mean \nin SD units)")+
   theme_bw()+
   scale_fill_continuous_sequential(palette = "BluYl")+
   theme(text = element_text(size = 18),
@@ -218,7 +226,7 @@ inla_froh_gg=ggField(IM_sp2, Mesh, Fill="Continuous")+
                filter(!E<1355)%>%
                filter(!E>1385)%>%
                filter(!N<7997.5), aes(x = E, y = N), alpha=0.1) # Specify data
-
+# havent transformed these because they are deviations from mean anyway
 
 
 
@@ -226,9 +234,9 @@ froh_spat=reg+inla_froh_gg+plot_annotation(tag_levels = 'A')
 froh_spat                    
 
 ggsave(froh_spat,
-       file = "Deer_spatial_variation_ID/plots/Overleaf_plots_spatial_ID/Fig2.png",
+       file = "Deer_spatial_variation_ID/REVISED/Figs/Fig2.jpeg",
        width = 9,
        height = 5, 
        bg = "white"
-)
+) #updated 25.11.23
 

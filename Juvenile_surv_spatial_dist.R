@@ -7,10 +7,10 @@ library(INLA)
 library(inlabru)
 library(ggregplot)
 
-
+#updated 20.11.24
 setwd("/Volumes/Seagate_HD/")
 
-surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc_2024.txt", sep = ",", header = TRUE)%>%
+surv_loc_df=read.table("Deer_spatial_variation_ID/survival_loc_2024_new_calves.txt", sep = ",", header = TRUE)%>%
   select(-MumFROH, -BirthWt)%>%
   filter(!E>1385)%>%
   filter(!N<7997.5) %>%#removing ids with no known region or ~10 ids with outside the limits of study area
@@ -35,6 +35,8 @@ suv_model_simple=glmmTMB(juvenile_survival~ 1+ Sex + MotherStatus + mum_age+mum_
 
 surv_reg_fixed=update(suv_model_simple, ~ . + Reg) ##just region as fixed effect
 summary(surv_reg_fixed)
+
+anova(suv_model_simple,surv_reg_fixed) ## region fixed is a better fit i.e. region is significant.
 
 em=emmeans(surv_reg_fixed, ~"Reg")
 pairs(em)

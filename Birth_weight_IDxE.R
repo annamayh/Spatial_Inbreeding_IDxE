@@ -4,10 +4,13 @@ library(ggeffects)
 library(patchwork)
 library(emmeans)
 
+#updated 25/11/24
 
 setwd("/Volumes/Seagate_HD/")
 
-bw_df=read.table("Deer_spatial_variation_ID/birthweight_loc_2024.txt", sep = ",", header = TRUE)
+bw_df=read.table("Deer_spatial_variation_ID/birthweight_loc_2024_new_calves.txt", sep = ",", header = TRUE)%>%
+  mutate(FROH_trans=sqrt(FROH))
+
 
 bw_df$Code=as.factor(bw_df$Code)
 bw_df$MumCode=as.factor(bw_df$MumCode)
@@ -24,111 +27,85 @@ bw_model_simple=glmmTMB(CaptureWt~ Sex + AgeHrs+ MotherStatus+mum_age+mum_age_sq
                         na.action = na.omit,
 )
 
-bw_reg_inter=update(bw_model_simple, ~ . + Reg*FROH) ##just region as fixed effect
+bw_reg_inter=update(bw_model_simple, ~ . + Reg*FROH_trans) ##
 summary(bw_reg_inter)
 
-emtrends(bw_reg_inter, pairwise ~ Reg, var = "FROH")
-
-
+emtrends(bw_reg_inter, pairwise ~ Reg, var = "FROH_trans")
 # $emtrends
-# Reg FROH.trend   SE   df lower.CL upper.CL
-# IM      -4.892 1.67 2362    -8.17    -1.62
-# LA      -3.079 2.15 2362    -7.29     1.13
-# MG      -4.590 1.78 2362    -8.08    -1.10
-# NG      -4.044 1.33 2362    -6.66    -1.43
-# SG      -0.139 2.34 2362    -4.74     4.46
-# SI      -1.863 1.64 2362    -5.08     1.35
+# Reg FROH_trans.trend    SE   df lower.CL upper.CL
+# IM            -3.517 1.020 2478    -5.52  -1.5102
+# LA            -2.237 1.120 2478    -4.44  -0.0339
+# MG            -1.738 0.897 2478    -3.50   0.0216
+# NG            -2.254 0.703 2478    -3.63  -0.8746
+# SG            -0.268 1.170 2478    -2.57   2.0306
+# SI            -1.185 0.873 2478    -2.90   0.5259
 # 
 # Results are averaged over the levels of: Sex, MotherStatus 
 # Confidence level used: 0.95 
 # 
 # $contrasts
 # contrast estimate   SE   df t.ratio p.value
-# IM - LA    -1.813 2.71 2362  -0.668  0.9854
-# IM - MG    -0.302 2.44 2362  -0.124  1.0000
-# IM - NG    -0.849 2.13 2362  -0.398  0.9987
-# IM - SG    -4.753 2.88 2362  -1.653  0.5636
-# IM - SI    -3.029 2.33 2362  -1.298  0.7864
-# LA - MG     1.511 2.78 2362   0.543  0.9944
-# LA - NG     0.965 2.52 2362   0.383  0.9989
-# LA - SG    -2.940 3.18 2362  -0.926  0.9399
-# LA - SI    -1.216 2.70 2362  -0.450  0.9977
-# MG - NG    -0.546 2.23 2362  -0.245  0.9999
-# MG - SG    -4.451 2.94 2362  -1.514  0.6555
-# MG - SI    -2.727 2.43 2362  -1.122  0.8722
-# NG - SG    -3.905 2.69 2362  -1.450  0.6965
-# NG - SI    -2.180 2.13 2362  -1.025  0.9097
-# SG - SI     1.724 2.86 2362   0.602  0.9909
-# 
+# IM - LA   -1.2800 1.52 2478  -0.844  0.9592
+# IM - MG   -1.7789 1.36 2478  -1.311  0.7793
+# IM - NG   -1.2627 1.24 2478  -1.019  0.9117
+# IM - SG   -3.2485 1.55 2478  -2.091  0.2921
+# IM - SI   -2.3315 1.34 2478  -1.735  0.5083
+# LA - MG   -0.4989 1.44 2478  -0.348  0.9993
+# LA - NG    0.0173 1.32 2478   0.013  1.0000
+# LA - SG   -1.9685 1.62 2478  -1.213  0.8309
+# LA - SI   -1.0515 1.42 2478  -0.740  0.9769
+# MG - NG    0.5162 1.14 2478   0.454  0.9976
+# MG - SG   -1.4696 1.48 2478  -0.990  0.9213
+# MG - SI   -0.5526 1.26 2478  -0.440  0.9979
+# NG - SG   -1.9858 1.37 2478  -1.455  0.6933
+# NG - SI   -1.0688 1.13 2478  -0.948  0.9338
+# SG - SI    0.9170 1.46 2478   0.628  0.9890
 # Results are averaged over the levels of: Sex, MotherStatus 
 # P value adjustment: tukey method for comparing a family of 6 estimates
 
-emmip(bw_reg_inter, Reg ~ FROH, cov.reduce = range,CIarg = list(lwd = 2, alpha = 0.5)) +
-  theme_bw()
-
 ## predictions from model
 
-inter=plot(predict_response(bw_reg_inter, terms = c("FROH[all]","Reg")),show.title=FALSE, line.size=1, colors="metro")+
-  labs(x = expression(F["ROH"]), y = "Birth Weight (kg)", colour = "Spatial \nregion")+
-  theme(text = element_text(size = 15)) +
-  xlim(0,0.2)
 
-inter
 
-inter_extended_bw=plot(predict_response(bw_reg_inter, terms = c("FROH[all]","Reg")),show.title=FALSE, line.size=1, colors="metro")+
+pred_bw=predict_response(bw_reg_inter, terms = c("FROH_trans[all]","Reg"))%>%
+  as.data.frame()%>%
+  mutate(FROH=x^2)## tranforming back into FROH
+
+cols = c("SI"="#f0a30a" ,"IM" = "#a20025", "LA" = "#1ba1e2", "NG" = "#fa6800", "MG" = "#008a00", "SG" = "#647687")
+
+inter_bw=ggplot(pred_bw, aes(x=FROH, y=predicted, ymin=conf.low, ymax=conf.high,
+                                 group = group, colour = group, fill=group))+
+  geom_line(linewidth=1)+
+  geom_ribbon(alpha=0.15, colour = NA, show.legend = F)+
   labs(x = expression(F["ROH"]), y = "Predicted birth weight (kg)", colour = "Spatial \nregion")+
-  theme(text = element_text(size = 15)) 
-inter_extended_bw
+  theme_bw()+
+  theme(text = element_text(size = 15)) +
+  scale_color_manual(values = cols, breaks=c("SI","IM","LA", "NG", "MG", "SG"))+
+  scale_fill_manual(values = cols)
+
+inter_bw
 
 
-# only testing slope difference between 0-0.2 FROH because below this is where there are very few ids 
-#test_predictions(bw_reg_inter,c("FROH[0,0.05,0.1,0.15,0.2]","Reg"), p_adjust = "bonferroni")
 
-# (Average) Linear trend for FROH
+
+
+
+# ggsave(inter,
+#        file = "Deer_spatial_variation_ID/plots/IDxE_birthWt.png",
+#        width = 7,
+#        height = 6, 
+#        bg = "white"
+# )
 # 
-# Reg   | Contrast |       95% CI |      p
-# ----------------------------------------
-#   IM-LA |    -1.81 |  -7.13, 3.51 | > .999
-# IM-MG |    -0.30 |  -5.08, 4.47 | > .999
-# IM-NG |    -0.85 |  -5.02, 3.33 | > .999
-# IM-SG |    -4.75 | -10.39, 0.89 | > .999
-# IM-SI |    -3.03 |  -7.60, 1.55 | > .999
-# LA-MG |     1.51 |  -3.94, 6.96 | > .999
-# LA-NG |     0.96 |  -3.97, 5.90 | > .999
-# LA-SG |    -2.94 |  -9.16, 3.28 | > .999
-# LA-SI |    -1.22 |  -6.51, 4.08 | > .999
-# MG-NG |    -0.55 |  -4.92, 3.82 | > .999
-# MG-SG |    -4.45 | -10.21, 1.31 | > .999
-# MG-SI |    -2.73 |  -7.49, 2.03 | > .999
-# NG-SG |    -3.90 |  -9.19, 1.38 | > .999
-# NG-SI |    -2.18 |  -6.35, 1.99 | > .999
-# SG-SI |     1.72 |  -3.89, 7.34 | > .999
 # 
+# ggsave(inter_extended,
+#        file = "Deer_spatial_variation_ID/plots/IDxE_birthWt_SUPP.png",
+#        width = 7,
+#        height = 6, 
+#        bg = "white"
+# )
 
 
 
-emtrends(bw_reg_inter, pairwise ~ Reg, var = "FROH")
-
-emmip(bw_reg_inter, Reg ~ FROH, cov.reduce = range)
-
-
-
-ggsave(inter,
-       file = "Deer_spatial_variation_ID/plots/IDxE_birthWt.png",
-       width = 7,
-       height = 6, 
-       bg = "white"
-)
-
-
-ggsave(inter_extended,
-       file = "Deer_spatial_variation_ID/plots/IDxE_birthWt_SUPP.png",
-       width = 7,
-       height = 6, 
-       bg = "white"
-)
-
-
-
-save(inter_extended_bw, file = "Deer_spatial_variation_ID/plots/bw_IDxE.RData")
-
+save(inter_bw, file = "Deer_spatial_variation_ID/plots/bw_IDxE.RData")
+# updated 25.11.23
